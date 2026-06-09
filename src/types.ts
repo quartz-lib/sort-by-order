@@ -16,6 +16,4 @@ export interface SortByOrderOptions {
   missingOrderPlacement?: "end" | "start";
 }
 
-export interface SortByOrderEmitterOptions {
-  orderKey?: string;
-}
+export type SortByOrderEmitterOptions = SortByOrderOptions;

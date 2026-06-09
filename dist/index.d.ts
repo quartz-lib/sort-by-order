@@ -16,14 +16,12 @@ interface SortByOrderOptions {
     /** Where items without an order value are placed. Default: "end" */
     missingOrderPlacement?: "end" | "start";
 }
-interface SortByOrderEmitterOptions {
-    orderKey?: string;
-}
+type SortByOrderEmitterOptions = SortByOrderOptions;
 
 /**
- * Injects `order` from frontmatter into `static/contentIndex.json`.
+ * Writes order metadata and injects Explorer sorting without manual quartz.ts changes.
  *
- * Run after the ContentIndex emitter so Explorer can sort client-side.
+ * Uses a standalone orderIndex.json because emitters run in parallel with ContentIndex.
  */
 declare const SortByOrder: QuartzEmitterPlugin<Partial<SortByOrderEmitterOptions>>;
 

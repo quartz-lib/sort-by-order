@@ -9,14 +9,14 @@ import type {
   QuartzPluginData,
 } from "@quartz-community/types";
 import { joinSegments } from "@quartz-community/types";
+import { buildExplorerPatchScript } from "./clientScript.js";
 import type { SortByOrderEmitterOptions } from "./types.js";
 
 const defaultOptions: Required<SortByOrderEmitterOptions> = {
   orderKey: "order",
+  foldersFirst: true,
+  missingOrderPlacement: "end",
 };
-
-type ContentIndexEntry = Record<string, unknown> & { order?: number };
-type ContentIndexJson = Record<string, ContentIndexEntry>;
 
 function parseOrder(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -56,40 +56,24 @@ function buildOrderMap(
   return orderBySlug;
 }
 
-async function augmentContentIndex(
+async function emitOrderIndex(
   ctx: BuildCtx,
   content: ProcessedContent[],
   orderKey: string,
 ): Promise<FilePath[]> {
-  const indexPath = joinSegments(ctx.argv.output, "static/contentIndex.json") as FilePath;
-
-  let index: ContentIndexJson;
-  try {
-    index = JSON.parse(await fs.readFile(indexPath, "utf-8")) as ContentIndexJson;
-  } catch {
-    return [];
-  }
-
   const orderBySlug = buildOrderMap(content, orderKey);
-
-  for (const [slug, entry] of Object.entries(index)) {
-    const order = orderBySlug.get(slug as FullSlug);
-    if (order !== undefined) {
-      entry.order = order;
-    } else {
-      delete entry.order;
-    }
-  }
+  const indexPath = joinSegments(ctx.argv.output, "static/orderIndex.json") as FilePath;
 
   await fs.mkdir(path.dirname(indexPath), { recursive: true });
-  await fs.writeFile(indexPath, JSON.stringify(index));
+  await fs.writeFile(indexPath, JSON.stringify(Object.fromEntries(orderBySlug)));
+
   return [indexPath];
 }
 
 /**
- * Injects `order` from frontmatter into `static/contentIndex.json`.
+ * Writes order metadata and injects Explorer sorting without manual quartz.ts changes.
  *
- * Run after the ContentIndex emitter so Explorer can sort client-side.
+ * Uses a standalone orderIndex.json because emitters run in parallel with ContentIndex.
  */
 export const SortByOrder: QuartzEmitterPlugin<Partial<SortByOrderEmitterOptions>> = (
   userOpts,
@@ -97,7 +81,7 @@ export const SortByOrder: QuartzEmitterPlugin<Partial<SortByOrderEmitterOptions>
   const options = { ...defaultOptions, ...userOpts };
 
   const emit = async (ctx: BuildCtx, content: ProcessedContent[]) => {
-    return augmentContentIndex(ctx, content, options.orderKey);
+    return emitOrderIndex(ctx, content, options.orderKey);
   };
 
   return {
@@ -109,5 +93,15 @@ export const SortByOrder: QuartzEmitterPlugin<Partial<SortByOrderEmitterOptions>
         yield outputPath;
       }
     },
+    externalResources: () => ({
+      js: [
+        {
+          loadTime: "afterDOMReady",
+          contentType: "inline",
+          script: buildExplorerPatchScript(options),
+          spaPreserve: true,
+        },
+      ],
+    }),
   };
 };

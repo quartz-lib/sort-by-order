@@ -64,7 +64,7 @@
     "category": "emitter",
     "version": "1.0.0",
     "quartzVersion": ">=5.0.0",
-    "dependencies": ["content-index"],
+    "dependencies": ["github:quartz-community/content-index"],
     "defaultOrder": 60,
     "defaultEnabled": true,
     "defaultOptions": {

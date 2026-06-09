@@ -2,7 +2,7 @@
 
 Quartz v5 的 Emitter 插件，让 Explorer 侧边栏中的文档和目录按 frontmatter 的 `order` 字段排序。
 
-Quartz 默认按字母顺序排列 Explorer 中的文件和文件夹。本插件在构建时将 `order` 注入 `static/contentIndex.json`，并提供配套的 `sortFn`，无需手动修改 ContentIndex 或 Explorer 源码。
+Quartz 默认按字母顺序排列 Explorer 中的文件和文件夹。本插件在构建时将 `order` 注入 `static/contentIndex.json`，并自动为 Explorer 注入排序逻辑，**安装启用即可生效，无需修改 `quartz.ts`**。
 
 仓库地址：[github.com/quartz-lib/sort-by-order](https://github.com/quartz-lib/sort-by-order)
 
@@ -21,7 +21,7 @@ Quartz 默认按字母顺序排列 Explorer 中的文件和文件夹。本插件
 - 已启用 [ContentIndex](https://github.com/quartz-community/content-index) 与 [Explorer](https://github.com/quartz-community/explorer) 插件
 
 > [!note]
-> Explorer 的 `sortFn` 是 JavaScript 函数，无法通过 YAML 配置。启用本插件后，还需在 `quartz.ts` 中传入 `sortByOrderFn`，排序才会生效。详见下方 [配置 Explorer](#配置-explorer)。
+> 站点需已启用 [ContentIndex](https://github.com/quartz-community/content-index) 与 [Explorer](https://github.com/quartz-community/explorer)（Quartz 默认模板已包含）。
 
 ## 安装
 
@@ -43,6 +43,8 @@ plugins:
     enabled: true
     options:
       orderKey: order
+      foldersFirst: true
+      missingOrderPlacement: end
 ```
 
 ### 选项说明
@@ -50,11 +52,6 @@ plugins:
 | 选项 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `orderKey` | `string` | `"order"` | frontmatter 中用于排序的字段名 |
-
-以下选项用于 `createSortByOrderFn()`，需在 `quartz.ts` 中配置：
-
-| 选项 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
 | `foldersFirst` | `boolean` | `true` | 为 `true` 时文件夹排在文件前面 |
 | `missingOrderPlacement` | `"end" \| "start"` | `"end"` | 未设置 `order` 的项排在末尾或开头 |
 
@@ -78,44 +75,15 @@ order: 2
 ---
 ```
 
-### 配置 Explorer
-
-在 `quartz.ts` 中为 Explorer 传入排序函数：
-
-```ts
-import { loadQuartzConfig, loadQuartzLayout } from "./quartz/plugins/loader/config-loader"
-import * as Plugin from "./.quartz/plugins"
-import { sortByOrderFn } from "@quartz-community/sort-by-order"
-
-const config = await loadQuartzConfig()
-export default config
-
-export const layout = await loadQuartzLayout({
-  byPageType: {
-    content: {
-      left: [
-        Plugin.Explorer({
-          sortFn: sortByOrderFn,
-        }),
-      ],
-    },
-  },
-})
-```
-
 ### 示例：文件夹与文件混合排序
 
-适用于希望目录和笔记按同一套 `order` 混排的场景：
-
-```ts
-import { createSortByOrderFn } from "@quartz-community/sort-by-order"
-
-const sortFn = createSortByOrderFn({
-  foldersFirst: false,
-  missingOrderPlacement: "end",
-})
-
-Plugin.Explorer({ sortFn })
+```yaml
+plugins:
+  - source: github:quartz-lib/sort-by-order
+    enabled: true
+    options:
+      foldersFirst: false
+      missingOrderPlacement: end
 ```
 
 ### 示例：自定义 frontmatter 字段
@@ -128,10 +96,14 @@ plugins:
       orderKey: noteOrder
 ```
 
-```ts
-import { createSortByOrderFn } from "@quartz-community/sort-by-order"
+### 高级：手动配置 Explorer（可选）
 
-const sortFn = createSortByOrderFn({ orderKey: "noteOrder" })
+插件会自动覆盖 Explorer 默认的字母序 `sortFn`。若需完全手动控制，可禁用本插件并导入 `sortByOrderFn`：
+
+```ts
+import { sortByOrderFn } from "@quartz-community/sort-by-order"
+
+Plugin.Explorer({ sortFn: sortByOrderFn })
 ```
 
 > [!tip]
@@ -157,13 +129,14 @@ export default {
 
 ## 工作原理
 
-插件分两步完成排序：
+插件分三步完成排序：
 
-1. **Emitter（`SortByOrder`）**：在 ContentIndex（`defaultOrder: 50`）生成 `static/contentIndex.json` 之后运行（`defaultOrder: 60`），从每篇文档的 frontmatter 读取 `order`，写入对应索引条目。
-2. **排序函数（`sortByOrderFn`）**：Explorer 在客户端从 `contentIndex.json` 构建文件树时，通过 `sortFn` 比较各节点的 `data.order` 完成排序。
+1. **Emitter（`SortByOrder`）**：从每篇文档的 frontmatter 读取 `order`，写入独立的 `static/orderIndex.json`（与 ContentIndex 并行构建，避免竞态）。
+2. **客户端脚本注入**：通过 `externalResources()` 注入脚本，将 `orderIndex.json` 合并进 `fetchData`，并覆盖 Explorer 的默认 `sortFn`。
+3. **排序比较**：Explorer 构建文件树时比较各节点的 `data.order` 完成排序。
 
 > [!note]
-> ContentIndex 默认不包含 frontmatter 字段。Explorer 在浏览器端运行，无法直接访问构建时的 frontmatter，因此需要本插件先将 `order` 注入索引文件。
+> ContentIndex 默认不包含 frontmatter 字段，且 Quartz 的 Emitter 并行执行。本插件通过独立的 `orderIndex.json` 规避竞态，再在客户端合并数据。
 
 默认模式下，同层级的文件夹排在文件前面；关闭 `foldersFirst` 后，文件夹和文件按 `order` 统一排序。
 
