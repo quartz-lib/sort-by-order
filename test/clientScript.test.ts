@@ -26,9 +26,16 @@ describe("clientScript", () => {
     expect(script).not.toContain("if (!dataFns.sortFn)");
   });
 
-  it("merges orderIndex.json into fetchData", () => {
+  it("loads orderIndex.json into a global map for sortFn", () => {
     const script = buildExplorerPatchScript({});
     expect(script).toContain("orderIndex.json");
-    expect(script).toContain("fetchData");
+    expect(script).toContain("__sortByOrderMap");
+    expect(script).not.toContain("fetchData");
+  });
+
+  it("reads order from window.__sortByOrderMap inside sortFn", () => {
+    const source = getSortFnSource({});
+    expect(source).toContain("__sortByOrderMap");
+    expect(source).toContain("node.slug");
   });
 });

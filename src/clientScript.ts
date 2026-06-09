@@ -23,7 +23,18 @@ export function getSortFnSource(userOpts?: SortByOrderOptions): string {
 
   function getOrder(node) {
     const value = node.data && node.data[orderKey];
-    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    const orderBySlug =
+      (typeof window !== "undefined" && window.__sortByOrderMap) || {};
+    const slug = (node.data && node.data.slug) || node.slug;
+    if (slug && orderBySlug[slug] != null) {
+      return orderBySlug[slug];
+    }
+
+    return undefined;
   }
 
   function compareDisplayName(x, y) {
@@ -76,7 +87,7 @@ export function buildExplorerPatchScript(options: SortByOrderOptions): string {
 (function () {
   var sortFnSource = ${JSON.stringify(sortFnSource)};
 
-  function mergeOrderIndex(index) {
+  function loadOrderIndex() {
     var base = (document.body && document.body.dataset.basepath) || "";
     return fetch(base + "static/orderIndex.json")
       .then(function (response) {
@@ -86,25 +97,16 @@ export function buildExplorerPatchScript(options: SortByOrderOptions): string {
         return {};
       })
       .then(function (orders) {
-        var content = index.content || index;
-        for (var slug in content) {
-          if (
-            Object.prototype.hasOwnProperty.call(content, slug) &&
-            orders[slug] != null
-          ) {
-            content[slug].order = orders[slug];
-          }
-        }
-        return index;
+        window.__sortByOrderMap = orders;
+        document.dispatchEvent(
+          new CustomEvent("nav", { detail: { url: location.pathname } }),
+        );
+        return orders;
       });
   }
 
-  if (typeof fetchData !== "undefined") {
-    var originalFetchData = fetchData;
-    fetchData = originalFetchData.then(function (index) {
-      return mergeOrderIndex(index);
-    });
-  }
+  window.__sortByOrderMap = window.__sortByOrderMap || {};
+  loadOrderIndex();
 
   function patchExplorerSortFn() {
     var explorers = document.querySelectorAll("div.explorer");
