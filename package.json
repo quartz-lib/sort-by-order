@@ -1,0 +1,92 @@
+{
+  "name": "@quartz-community/sort-by-order",
+  "version": "0.1.0",
+  "description": "Sort Quartz Explorer documents and folders by frontmatter order.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Quartz Community",
+  "homepage": "https://quartz.jzhao.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:quartz-lib/sort-by-order.git"
+  },
+  "keywords": [
+    "quartz",
+    "quartz-plugin",
+    "sort",
+    "order",
+    "frontmatter",
+    "explorer"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run test"
+  },
+  "peerDependencies": {
+    "vfile": "^6.0.3"
+  },
+  "peerDependenciesMeta": {
+    "vfile": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@quartz-community/types": "github:quartz-community/types",
+    "@quartz-community/utils": "github:quartz-community/utils"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "quartz": {
+    "name": "sort-by-order",
+    "displayName": "Sort By Order",
+    "category": "emitter",
+    "version": "1.0.0",
+    "quartzVersion": ">=5.0.0",
+    "dependencies": ["content-index"],
+    "defaultOrder": 60,
+    "defaultEnabled": true,
+    "defaultOptions": {
+      "orderKey": "order",
+      "foldersFirst": true,
+      "missingOrderPlacement": "end"
+    },
+    "optionSchema": {
+      "orderKey": {
+        "type": "string"
+      },
+      "foldersFirst": {
+        "type": "boolean"
+      },
+      "missingOrderPlacement": {
+        "type": "enum",
+        "values": ["end", "start"]
+      }
+    }
+  },
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10.9.2"
+  }
+}
