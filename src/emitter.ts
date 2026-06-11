@@ -9,7 +9,11 @@ import type {
   QuartzPluginData,
 } from "@quartz-community/types";
 import { joinSegments } from "@quartz-community/types";
-import { buildExplorerPatchScript } from "./clientScript.js";
+import {
+  buildExplorerPatchScript,
+  buildOrderIndexPrefetchScript,
+  explorerPendingCss,
+} from "./clientScript.js";
 import type { SortByOrderEmitterOptions } from "./types.js";
 
 const defaultOptions: Required<SortByOrderEmitterOptions> = {
@@ -94,7 +98,20 @@ export const SortByOrder: QuartzEmitterPlugin<Partial<SortByOrderEmitterOptions>
       }
     },
     externalResources: () => ({
+      css: [
+        {
+          content: explorerPendingCss,
+          inline: true,
+          spaPreserve: true,
+        },
+      ],
       js: [
+        {
+          loadTime: "beforeDOMReady",
+          contentType: "inline",
+          script: buildOrderIndexPrefetchScript(),
+          spaPreserve: true,
+        },
         {
           loadTime: "afterDOMReady",
           contentType: "inline",

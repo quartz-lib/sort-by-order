@@ -84,6 +84,35 @@ function resolveBasePath(to) {
   return base + slug;
 }`;
 
+/** Hide Explorer until order data is ready to avoid a visible re-sort on refresh. */
+export const explorerPendingCss = `
+html.sort-by-order-pending .explorer .explorer-ul {
+  visibility: hidden;
+}`;
+
+/**
+ * Start fetching orderIndex.json as early as possible (before DOM is ready).
+ * Sites deployed under a subpath are retried in the afterDOMReady bootstrap.
+ */
+export function buildOrderIndexPrefetchScript(): string {
+  return `
+(function () {
+  window.__sortByOrderMap = {};
+  window.__sortByOrderReady = fetch("/static/orderIndex.json")
+    .then(function (response) {
+      return response.ok ? response.json() : {};
+    })
+    .catch(function () {
+      return {};
+    })
+    .then(function (orders) {
+      window.__sortByOrderMap = orders;
+      return orders;
+    });
+})();
+`.trim();
+}
+
 /**
  * Patch Explorer before it builds the file tree.
  * Injected via the emitter's externalResources() hook.
@@ -96,28 +125,73 @@ export function buildExplorerPatchScript(options: SortByOrderOptions): string {
   var sortFnSource = ${JSON.stringify(sortFnSource)};
   ${resolveBasePathSource}
 
-  function loadOrderIndex() {
+  var orderReady = false;
+
+  function fetchOrderIndex() {
     return fetch(resolveBasePath("static/orderIndex.json"))
       .then(function (response) {
         return response.ok ? response.json() : {};
       })
       .catch(function () {
         return {};
-      })
-      .then(function (orders) {
-        window.__sortByOrderMap = orders;
-        var url =
-          (document.body && document.body.dataset.slug) ||
-          location.pathname.replace(/^\\/+/, "");
-        document.dispatchEvent(
-          new CustomEvent("nav", { detail: { url: url } }),
-        );
-        return orders;
       });
   }
 
-  window.__sortByOrderMap = window.__sortByOrderMap || {};
-  loadOrderIndex();
+  function loadOrderIndex() {
+    var existing = window.__sortByOrderReady;
+    if (existing) {
+      return existing.then(function (orders) {
+        if (orders && Object.keys(orders).length > 0) {
+          window.__sortByOrderMap = orders;
+          return orders;
+        }
+        return fetchOrderIndex().then(function (orders) {
+          window.__sortByOrderMap = orders;
+          return orders;
+        });
+      });
+    }
+
+    window.__sortByOrderReady = fetchOrderIndex().then(function (orders) {
+      window.__sortByOrderMap = orders;
+      return orders;
+    });
+    return window.__sortByOrderReady;
+  }
+
+  function revealExplorer() {
+    document.documentElement.classList.remove("sort-by-order-pending");
+  }
+
+  function revealWhenExplorerRendered() {
+    var explorerUl = document.querySelector(".explorer .explorer-ul");
+    if (!explorerUl) {
+      revealExplorer();
+      return;
+    }
+
+    if (explorerUl.children.length > 1) {
+      revealExplorer();
+      return;
+    }
+
+    var observer = new MutationObserver(function () {
+      if (explorerUl.children.length > 1) {
+        observer.disconnect();
+        revealExplorer();
+      }
+    });
+    observer.observe(explorerUl, { childList: true });
+    setTimeout(function () {
+      observer.disconnect();
+      revealExplorer();
+    }, 500);
+  }
+
+  function gateNavUntilReady(event) {
+    if (orderReady) return;
+    event.stopImmediatePropagation();
+  }
 
   function patchExplorerSortFn() {
     var explorers = document.querySelectorAll("div.explorer");
@@ -129,10 +203,29 @@ export function buildExplorerPatchScript(options: SortByOrderOptions): string {
     }
   }
 
+  function bootstrapExplorer() {
+    document.documentElement.classList.add("sort-by-order-pending");
+    document.addEventListener("nav", gateNavUntilReady, true);
+    patchExplorerSortFn();
+
+    loadOrderIndex().then(function () {
+      orderReady = true;
+      document.removeEventListener("nav", gateNavUntilReady, true);
+      patchExplorerSortFn();
+
+      var url =
+        (document.body && document.body.dataset.slug) ||
+        location.pathname.replace(/^\\/+/, "");
+      document.dispatchEvent(new CustomEvent("nav", { detail: { url: url } }));
+      revealWhenExplorerRendered();
+    });
+  }
+
+  window.__sortByOrderMap = window.__sortByOrderMap || {};
   document.addEventListener("prenav", patchExplorerSortFn);
   document.addEventListener("nav", patchExplorerSortFn, true);
   document.addEventListener("render", patchExplorerSortFn, true);
-  patchExplorerSortFn();
+  bootstrapExplorer();
 })();
 `.trim();
 }

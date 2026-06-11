@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildExplorerPatchScript, getSortFnSource } from "../src/clientScript.js";
+import {
+  buildExplorerPatchScript,
+  buildOrderIndexPrefetchScript,
+  explorerPendingCss,
+  getSortFnSource,
+} from "../src/clientScript.js";
 
 describe("clientScript", () => {
   it("serializes sortFn for Explorer", () => {
@@ -44,5 +49,26 @@ describe("clientScript", () => {
     const source = getSortFnSource({});
     expect(source).toContain("__sortByOrderMap");
     expect(source).toContain("node.slug");
+  });
+
+  it("prefetches orderIndex.json before DOM is ready", () => {
+    const script = buildOrderIndexPrefetchScript();
+    expect(script).toContain('fetch("/static/orderIndex.json")');
+    expect(script).toContain("__sortByOrderReady");
+  });
+
+  it("hides Explorer until the first sorted render completes", () => {
+    const script = buildExplorerPatchScript({});
+    expect(explorerPendingCss).toContain("sort-by-order-pending");
+    expect(script).toContain("sort-by-order-pending");
+    expect(script).toContain("gateNavUntilReady");
+    expect(script).toContain("revealWhenExplorerRendered");
+    expect(script).toContain("stopImmediatePropagation");
+  });
+
+  it("does not trigger a second nav from loadOrderIndex", () => {
+    const script = buildExplorerPatchScript({});
+    const navDispatches = script.match(/dispatchEvent\(new CustomEvent\("nav"/g);
+    expect(navDispatches).toHaveLength(1);
   });
 });
