@@ -76,6 +76,14 @@ export function getSortFnSource(userOpts?: SortByOrderOptions): string {
 }`;
 }
 
+/** Mirrors @quartz-community/utils/path resolveBasePath for client-side fetches. */
+const resolveBasePathSource = `
+function resolveBasePath(to) {
+  var base = (document.body && document.body.dataset.basepath) || "";
+  var slug = to.charAt(0) === "/" ? to : "/" + to;
+  return base + slug;
+}`;
+
 /**
  * Patch Explorer before it builds the file tree.
  * Injected via the emitter's externalResources() hook.
@@ -86,10 +94,10 @@ export function buildExplorerPatchScript(options: SortByOrderOptions): string {
   return `
 (function () {
   var sortFnSource = ${JSON.stringify(sortFnSource)};
+  ${resolveBasePathSource}
 
   function loadOrderIndex() {
-    var base = (document.body && document.body.dataset.basepath) || "";
-    return fetch(base + "static/orderIndex.json")
+    return fetch(resolveBasePath("static/orderIndex.json"))
       .then(function (response) {
         return response.ok ? response.json() : {};
       })
@@ -98,8 +106,11 @@ export function buildExplorerPatchScript(options: SortByOrderOptions): string {
       })
       .then(function (orders) {
         window.__sortByOrderMap = orders;
+        var url =
+          (document.body && document.body.dataset.slug) ||
+          location.pathname.replace(/^\\/+/, "");
         document.dispatchEvent(
-          new CustomEvent("nav", { detail: { url: location.pathname } }),
+          new CustomEvent("nav", { detail: { url: url } }),
         );
         return orders;
       });

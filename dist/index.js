@@ -79,15 +79,21 @@ function getSortFnSource(userOpts) {
   return compareByOrder(a, b);
 }`;
 }
+var resolveBasePathSource = `
+function resolveBasePath(to) {
+  var base = (document.body && document.body.dataset.basepath) || "";
+  var slug = to.charAt(0) === "/" ? to : "/" + to;
+  return base + slug;
+}`;
 function buildExplorerPatchScript(options) {
   const sortFnSource = getSortFnSource(options);
   return `
 (function () {
   var sortFnSource = ${JSON.stringify(sortFnSource)};
+  ${resolveBasePathSource}
 
   function loadOrderIndex() {
-    var base = (document.body && document.body.dataset.basepath) || "";
-    return fetch(base + "static/orderIndex.json")
+    return fetch(resolveBasePath("static/orderIndex.json"))
       .then(function (response) {
         return response.ok ? response.json() : {};
       })
@@ -96,8 +102,11 @@ function buildExplorerPatchScript(options) {
       })
       .then(function (orders) {
         window.__sortByOrderMap = orders;
+        var url =
+          (document.body && document.body.dataset.slug) ||
+          location.pathname.replace(/^\\/+/, "");
         document.dispatchEvent(
-          new CustomEvent("nav", { detail: { url: location.pathname } }),
+          new CustomEvent("nav", { detail: { url: url } }),
         );
         return orders;
       });

@@ -33,6 +33,13 @@ describe("clientScript", () => {
     expect(script).not.toContain("fetchData");
   });
 
+  it("resolves orderIndex.json from site root on nested pages", () => {
+    const script = buildExplorerPatchScript({});
+    expect(script).toContain("resolveBasePath");
+    expect(script).toContain('resolveBasePath("static/orderIndex.json")');
+    expect(script).not.toContain('base + "static/orderIndex.json"');
+  });
+
   it("reads order from window.__sortByOrderMap inside sortFn", () => {
     const source = getSortFnSource({});
     expect(source).toContain("__sortByOrderMap");
